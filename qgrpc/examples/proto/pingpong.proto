@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+//option java_multiple_files = true;
+//option java_package = "io.grpc.examples.helloworld";
+//option java_outer_classname = "HelloWorldProto";
+//option objc_class_prefix = "HLW";
+
+package pingpong;
+
+// The greeting service definition.
+service ping 
+{
+  // Sends a greeting
+  rpc SayHello (PingRequest) returns (PingReply) {}
+
+  rpc GladToSeeMe(PingRequest) returns (stream PingReply){}
+
+  rpc GladToSeeYou(stream PingRequest) returns (PingReply){}
+
+  rpc BothGladToSee(stream PingRequest) returns (stream PingReply){}
+}
+
+// The request message containing the user's name.
+message PingRequest 
+{
+  string name = 1;
+  string message = 2;
+}
+
+// The response message containing the greetings
+message PingReply 
+{
+  string message = 1;
+}
+
