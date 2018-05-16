@@ -1,2 +1,2 @@
 # qgrpc
-Qt wrapper above Google RPC
+Qt wrapper around Google RPC
