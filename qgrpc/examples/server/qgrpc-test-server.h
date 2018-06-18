@@ -11,28 +11,25 @@
 class mainWindow: public QMainWindow, public Ui_MainWindow
 {
     Q_OBJECT;
-	QpingServerService service;
-	QGrpcServiceMonitor monitor;
+	QpingServerService pingservice;
+	QGrpcSrvServer server;
 	
 public:
 	mainWindow():Ui_MainWindow()
 	{
 		setupUi(this);
-		monitor.addService(&service);
+		server.addService(&pingservice);
 
         bool is_ok;
 		is_ok = connect(pb_start, SIGNAL(clicked()), this, SLOT(onStart1())); assert(is_ok);
-        is_ok = connect(&service, SIGNAL(SayHelloRequest(QpingServerService::SayHelloCallData*)), this, SLOT(onSayHello(QpingServerService::SayHelloCallData*))); assert(is_ok);
-		is_ok = connect(&service, SIGNAL(GladToSeeMeRequest(QpingServerService::GladToSeeMeCallData*)), this, SLOT(onGladToSeeMe(QpingServerService::GladToSeeMeCallData*))); assert(is_ok);
-		is_ok = connect(&service, SIGNAL(GladToSeeYouRequest(QpingServerService::GladToSeeYouCallData*)), this, SLOT(onGladToSeeYou(QpingServerService::GladToSeeYouCallData*))); assert(is_ok);
-		is_ok = connect(&service, SIGNAL(BothGladToSeeRequest(QpingServerService::BothGladToSeeCallData*)), this, SLOT(onBothGladToSee(QpingServerService::BothGladToSeeCallData*))); assert(is_ok);
-
-		monitor.startMonitor();
+        is_ok = connect(&pingservice, SIGNAL(SayHelloRequest(QpingServerService::SayHelloCallData*)), this, SLOT(onSayHello(QpingServerService::SayHelloCallData*))); assert(is_ok);
+		is_ok = connect(&pingservice, SIGNAL(GladToSeeMeRequest(QpingServerService::GladToSeeMeCallData*)), this, SLOT(onGladToSeeMe(QpingServerService::GladToSeeMeCallData*))); assert(is_ok);
+		is_ok = connect(&pingservice, SIGNAL(GladToSeeYouRequest(QpingServerService::GladToSeeYouCallData*)), this, SLOT(onGladToSeeYou(QpingServerService::GladToSeeYouCallData*))); assert(is_ok);
+		is_ok = connect(&pingservice, SIGNAL(BothGladToSeeRequest(QpingServerService::BothGladToSeeCallData*)), this, SLOT(onBothGladToSee(QpingServerService::BothGladToSeeCallData*))); assert(is_ok);
 		this->show();
     }
     ~mainWindow()
 	{
-		monitor.stopMonitor();
 	}
 
 	void setText(QPlainTextEdit* te, const QString& text)
@@ -50,8 +47,14 @@ private slots:
 		auto port = sb_port->value();
 		auto addr_port = QString("%1:%2").arg(ipaddr).arg(port);
 		setText(plainTextEdit, QString("Server started on %1").arg(addr_port));
-		service.start_service(QString("%1:%2").arg(ipaddr).arg(port).toStdString());
+		pingservice.AddListeningPort(QString("%1:%2").arg(ipaddr).arg(port).toStdString());
+		server.start();
 		pb_start->setDisabled(true);
+		//pb_stop->setDisabled(false);
+	}
+
+	void onStop1()
+	{
 	}
 
     void onSayHello(QpingServerService::SayHelloCallData* cd)

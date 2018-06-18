@@ -5,7 +5,10 @@
 #include "assert.h"
 #include <atomic>
 
-
+using grpc::ServerBuilder;
+using grpc::ServerCompletionQueue;
+using grpc::CompletionQueue;
+using grpc::Server;
 #ifndef WIN32
 #if (__cplusplus >= 201103L && __cplusplus < 201402L)
 namespace std {
@@ -21,5 +24,26 @@ namespace std {
 
 namespace QGrpcBase
 {
-    struct AbstractService { virtual void checkCQ() = 0; };
+
+	class AbstractServer
+	{
+	public:
+		virtual CompletionQueue* CQ() = 0;
+		virtual void Shutdown() = 0;
+		virtual bool Started() = 0;
+	};
+
+
+    class AbstractService 
+	{ 
+	public:
+		virtual void CheckCQ() = 0; 
+		virtual std::string ListeningPort() = 0;
+		virtual grpc::Service* Service() = 0;
+		virtual void Start(const AbstractServer* server) = 0;
+		virtual void PrepareForShutdown() = 0;
+	};
 }
+
+
+

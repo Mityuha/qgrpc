@@ -101,6 +101,7 @@ namespace QGrpcSrvBase
 		inline void Read() { return this->responder.Read(&this->request, this->tag_); }
 		inline bool StreamFinished() const { return !this->read_mode_; }
 		inline void Finish() { this->couldBeDeleted_ = true; return this->responder.Finish(this->reply, this->status, this->tag_); }
+		virtual ~ServerResponder() {}
 	protected:
 		virtual bool processEvent(void* tag, bool ok) override
 		{
@@ -120,6 +121,7 @@ namespace QGrpcSrvBase
 		inline void Finish() { this->couldBeDeleted_ = true; return this->responder.Finish(this->status, this->tag_); }
 		inline bool TimeToFinish() const { return this->time_to_finish_; }
 		inline void Read() { return this->responder.Read(&this->request, this->tag_); }
+		virtual ~ServerResponder() {}
 	protected:
 		virtual bool processEvent(void* tag, bool ok) override
 		{
@@ -171,65 +173,81 @@ namespace QGrpcSrvBase
 
 	struct AbstractCallData
 	{
-		virtual void cqReaction(const QGrpcServerService*, bool, bool) = 0;
+		virtual void cqReaction(const QGrpcServerService*, bool) = 0;
 		virtual void Destroy() = 0;
+		virtual ~AbstractCallData() {}
 	};
-
 
 	class QGrpcServerService : public QGrpcBase::AbstractService
 	{
 		grpc::Service* service_;
-		bool started_;
-		std::string server_address_;
-		std::unique_ptr<Server> server_;
-		std::unique_ptr<ServerCompletionQueue> notification_cq;
+		std::string addr_uri_;
+		std::mutex mutex_;
+		QGrpcBase::AbstractServer* server_ = nullptr;
 	public:
-		inline void start_service(const std::string& addr_uri)
+
+		inline virtual void Start(const QGrpcBase::AbstractServer* server) override
 		{
-			server_address_ = addr_uri;
-			assert(!server_address_.empty()); assert(service_);
-			ServerBuilder builder;
-			builder.AddListeningPort(server_address_, grpc::InsecureServerCredentials());
-			builder.RegisterService(service_);
-			notification_cq = builder.AddCompletionQueue();
-			server_ = builder.BuildAndStart();
-			started_ = true;
+			server_ = const_cast<QGrpcBase::AbstractServer*>(server);
 			makeRequests();
 		}
 
-		explicit QGrpcServerService(grpc::Service* service): service_(service), started_(false){}
-		virtual ~QGrpcServerService()
+		inline virtual std::string ListeningPort() override { return addr_uri_; }
+		inline virtual grpc::Service* Service() override { return service_; }
+
+		virtual void PrepareForShutdown() override
 		{
-			started_ = false;
+			std::lock_guard<std::mutex> _(mutex_);
 			if (server_)
 			{
-				server_->Shutdown(/*std::chrono::system_clock::time_point()*/);
-				server_->Wait();
+				grpc::CompletionQueue::NextStatus st;
+				while (true)
+				{
+					void* tag;
+					bool ok;
+					st = server_->CQ()->AsyncNext(&tag, &ok, std::chrono::system_clock::time_point());
+					if ((st == grpc::CompletionQueue::SHUTDOWN) || (st == grpc::CompletionQueue::TIMEOUT))/* || (st != grpc::CompletionQueue::GOT_EVENT) || !ok)*/
+						break;
+					tagActions_(tag, ok);
+				}
+				size_t cdsize = cdatas_.size();
+				for (size_t i = 0; i < cdsize; ++i)
+					destroyCallData(*cdatas_.begin());
 			}
-			if (notification_cq)
-			{
-				notification_cq->Shutdown(); // Always after the associated server's Shutdown()! 
-											 // Drain the cq_ that was created 
-				void* ignored_tag; bool ignored_ok;
-				while (notification_cq->Next(&ignored_tag, &ignored_ok)) {}
-			}
-			for (auto cd : cdatas_)
-				cd->Destroy();
 			server_ = nullptr;
-			notification_cq = nullptr;
 		}
 
-		virtual void checkCQ()
+		inline void AddListeningPort(const std::string& addr_uri){ addr_uri_ = addr_uri; }
+
+		explicit QGrpcServerService(grpc::Service* service) : service_(service){}
+		virtual ~QGrpcServerService()
 		{
-			if (!started_) return;
+			if (server_)
+				server_->Shutdown();
+			assert(!cdatas_.size());
+		}
+
+		virtual void CheckCQ() override
+		{
+			std::lock_guard<std::mutex> _(mutex_);
+			if (!server_ || !server_->Started()) return;
+			void* tag;
+			bool ok = false;
+			bool re = server_->CQ()->Next(&tag, &ok);
+			return tagActions_(tag, ok);
+		}
+
+		void AsyncCheckCQ()
+		{
+			std::lock_guard<std::mutex> _(mutex_);
+			if (!server_ || !server_->Started()) return;
 			void* tag;
 			bool ok = false;
 			grpc::CompletionQueue::NextStatus st;
-			st = notification_cq->AsyncNext(&tag, &ok, std::chrono::system_clock::time_point());
+			st = server_->CQ()->AsyncNext(&tag, &ok, std::chrono::system_clock::time_point());
 			if ((st == grpc::CompletionQueue::SHUTDOWN) || (st == grpc::CompletionQueue::TIMEOUT))/* || (st != grpc::CompletionQueue::GOT_EVENT) || !ok)*/
 				return;
-			static_cast<QGrpcSrvBase::AbstractCallData*>(tag)->cqReaction(this, ok, !started_);
-			return;
+			return tagActions_(tag, ok);
 		}
 
 		template<typename RPCTypes, typename RPCCallData>
@@ -238,7 +256,7 @@ namespace QGrpcSrvBase
 			RPCCallData* cd = new RPCCallData();
 			cdatas_.insert(cd);
 			QGrpcSrvBase::RequestRPC<typename RPCTypes::kind, typename RPCTypes::RequestType, typename RPCTypes::ReplyType, typename RPCTypes::AsyncGrpcServiceType, typename RPCTypes::RPCRequestFuncType, typename RPCCallData::responder_type>
-				(dynamic_cast<typename RPCTypes::AsyncGrpcServiceType*>(service_), cd->request_func_, &cd->context, &cd->request, &cd->responder, this->notification_cq.get(), this->notification_cq.get(), (void*)cd);
+				(dynamic_cast<typename RPCTypes::AsyncGrpcServiceType*>(service_), cd->request_func_, &cd->context, &cd->request, &cd->responder, server_->CQ(), dynamic_cast<grpc::ServerCompletionQueue*>(server_->CQ()), (void*)cd);
 		}
 
 		void destroyCallData(const AbstractCallData* cd)
@@ -249,6 +267,17 @@ namespace QGrpcSrvBase
 		}
 	protected:
 		virtual void makeRequests() = 0;
+		void tagActions_(void* tag, bool ok)
+		{
+			if (!tag)
+				return;
+			if (!server_->Started())
+			{
+				destroyCallData(static_cast<QGrpcSrvBase::AbstractCallData*>(tag));
+				return;
+			}
+			static_cast<QGrpcSrvBase::AbstractCallData*>(tag)->cqReaction(this, ok);
+		}
 	private:
 		std::set<AbstractCallData*> cdatas_;
 
@@ -272,14 +301,10 @@ namespace QGrpcSrvBase
 	public:
 		explicit ServerCallData(SignalType signal_func, RPCRequestType request_func) :signal_func_(signal_func), request_func_(request_func), first_time_reaction_(false) {}
 		virtual ~ServerCallData() {}
-		inline virtual void cqReaction(const QGrpcServerService* service_, bool ok, bool server_shutdown) override
+		inline virtual void cqReaction(const QGrpcServerService* service_, bool ok) override
 		{
 			auto response = dynamic_cast<RPCCallData*>(this);
-			if (server_shutdown)
-			{
-				(const_cast<QGrpcServerService*>(service_))->destroyCallData(this);
-				return;
-			}
+			
 			if (!first_time_reaction_)
 			{
 				first_time_reaction_ = true;
