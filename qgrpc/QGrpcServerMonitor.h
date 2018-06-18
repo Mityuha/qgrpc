@@ -41,14 +41,6 @@ public:
 
 	virtual bool Started() override { return started_.load(); }
 
-	/*void startService(QGrpcBase::AbstractService* const service, const std::string& addr_uri)
-	{
-		assert(!addr_uri.empty());
-		assert(services_.count(service));
-		if (!server_cq)
-			server_cq = builder.AddCompletionQueue();
-		service->startService(builder, server_cq.get(), addr_uri);
-	}*/
 	virtual ~QSrvServerPrivate() 
 	{
 		Shutdown();
@@ -66,7 +58,6 @@ public slots :
 	}
 	void stop()
 	{
-		//if (cq_timer_) cq_timer_->stop();
 		Shutdown();
 	}
 
@@ -74,6 +65,11 @@ public slots :
 private slots:
 	void AsyncMonitorRpc()
 	{
+		if (!started_.load())
+		{
+			cq_timer_->stop();
+			return;
+		}
 		for (auto* const service : services_)
 			service->CheckCQ();
 	}
