@@ -1,6 +1,6 @@
 #pragma once
 
-#include "QGrpcBase.h"
+#include "QAbstractGrpc.h"
 
 using grpc::Channel;
 using grpc::ClientAsyncResponseReader;
@@ -186,7 +186,7 @@ namespace QGrpcCliBase
 		virtual grpc_connectivity_state channelState() const = 0;
 		virtual grpc_connectivity_state checkChannelState() const = 0;
 		virtual bool connected() const = 0;
-		CompletionQueue cq_;
+		//CompletionQueue cq_;
 	};
 
 
@@ -197,24 +197,22 @@ namespace QGrpcCliBase
 		std::shared_ptr< grpc::ChannelCredentials > creds_;
 		std::shared_ptr<Channel> channel_;
 		std::unique_ptr<ChannelFeatures> channelFeatures_;
-		std::atomic<bool> connected_;
+		//std::atomic<bool> connected_;
 	protected:
 		std::unique_ptr<typename GRPCService::Stub> stub_;
 	public:
-		explicit ConnectivityFeatures() :
-			connected_(false)
+		explicit ConnectivityFeatures()
 		{}
 		void grpc_connect(const std::string& target, const std::shared_ptr< grpc::ChannelCredentials >& creds = grpc::InsecureChannelCredentials())
 		{
-			if (connected_.load()) return;
+			if (channelFeatures_) return;
 			target_ = target;
 			creds_ = creds;
 			grpc_connect_();
 		}
 		void grpc_disconnect()
 		{
-			if (!connected_.load()) return;
-			connected_.store(false);
+			if (!channelFeatures_) return;
 			channelFeatures_ = nullptr;
 			channel_ = nullptr;
 			stub_ = nullptr;
@@ -237,7 +235,10 @@ namespace QGrpcCliBase
 			if (!channelFeatures_) return grpc_connectivity_state::GRPC_CHANNEL_SHUTDOWN; 
 			return channelFeatures_->checkChannelState(); 
 		}
-		virtual bool connected() const override { return connected_.load(); }
+		virtual bool connected() const override 
+		{
+			return (channelFeatures_) && (channelFeatures_->channelState() == grpc_connectivity_state::GRPC_CHANNEL_READY);
+		}
 	private:
 		void grpc_connect_()
 		{
@@ -248,15 +249,19 @@ namespace QGrpcCliBase
 			stub_.swap(new_stub_);
 			channelFeatures_ = std::make_unique<ChannelFeatures>(channel_);
 			channelFeatures_->checkChannelState();
-			connected_.store(true);
 		}
 	};
 
 	template<typename SERVICE>
-	struct AbstractCallData { virtual void cqActions(const SERVICE*, bool) = 0; };
+	class AbstractCallData 
+	{ 
+	public:
+		virtual ~AbstractCallData() {}
+		virtual void cqActions(const SERVICE*, bool) = 0; 
+	};
 
 	template<typename SERVICE>
-	class MonitorFeatures : public QGrpcBase::AbstractService
+	class MonitorFeatures : public QGrpcCliAbstract::AbstractService
 	{
 		AbstractConnectivityFeatures* conn_;
 		using FuncType = void (SERVICE::*)(int, int);
@@ -264,15 +269,14 @@ namespace QGrpcCliBase
 		bool not_connected_notified_;
 	public:
 		explicit MonitorFeatures(AbstractConnectivityFeatures* conn, FuncType signal) : conn_(conn), channelStateChangedSignal_(signal), not_connected_notified_(false) {}
-		virtual void checkCQ() override
+		virtual bool CheckCQ() override
 		{
 			auto service_ = dynamic_cast< SERVICE* >(this);
-			if (!conn_->connected())
+			if (!conn_->connected() && !not_connected_notified_)
 			{
-				if (not_connected_notified_) return;
 				(const_cast< SERVICE* >(service_)->*channelStateChangedSignal_)(static_cast<int>(grpc_connectivity_state::GRPC_CHANNEL_SHUTDOWN), static_cast<int>(grpc_connectivity_state::GRPC_CHANNEL_SHUTDOWN));
 				not_connected_notified_ = true;
-				return;
+				return false;
 			}
 
 			auto old_state = conn_->channelState();
@@ -282,37 +286,44 @@ namespace QGrpcCliBase
 				(const_cast< SERVICE* >(service_)->*channelStateChangedSignal_)(static_cast<int>(old_state), static_cast<int>(new_state));
 				not_connected_notified_ = false;
 			}
+
+			//if (!conn_->connected())
+			//	return false;
+
 			//
 			void* tag;
 			bool ok = false;
+
 			grpc::CompletionQueue::NextStatus st;
-			//auto deadline = QGrpcCliBase::deadlineFromMSec(100);
-			st = conn_->cq_.AsyncNext(&tag, &ok, std::chrono::system_clock::time_point());
+			st = cq_.AsyncNext(&tag, &ok, deadlineFromMSec(100));
 			if ((st == grpc::CompletionQueue::SHUTDOWN) || (st == grpc::CompletionQueue::TIMEOUT))/* || (st != grpc::CompletionQueue::GOT_EVENT) || !ok)*/
-				return;
+				return false;
 			static_cast< AbstractCallData< SERVICE >* >(tag)->cqActions(service_, ok);
-			return;
+			return true;
 		}
+	public:
+		CompletionQueue cq_;
 	};
 
-	template<typename RPC, typename RPCCallData>
+	template<typename RPC, typename RPCCallData> 
 	class ClientCallData : public AbstractCallData<typename RPC::Service>, public ClientResponder< typename RPC::kind, typename RPC::ReplyType, typename RPC::RequestType >
 	{
 		using FuncType = void (RPC::Service::*)(RPCCallData*);
 		FuncType func_;
 	public:
 		explicit ClientCallData(FuncType func) :func_(func) {}
-		virtual ~ClientCallData() {}
+		virtual ~ClientCallData() 
+		{}
 		inline virtual void cqActions(const typename RPC::Service* service, bool ok) override
 		{
 			auto response = dynamic_cast<RPCCallData*>(this);
 			void* tag = static_cast<void*>(response);
 			if (!this->processEvent(tag, ok)) return;
-			/*if (response->couldBeDeleted())
-			{
-			delete response;
-			return;
-			}*/
+			//if (response->CouldBeDeleted())//comment out to manually delete tags
+			//{
+			//	delete response;
+			//	return;
+			//}
 			(const_cast< typename RPC::Service* >(service)->*func_)( response );
 		}
 		friend typename RPC::Service;

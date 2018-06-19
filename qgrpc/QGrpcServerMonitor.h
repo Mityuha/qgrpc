@@ -3,19 +3,24 @@
 #include <QThread>
 #include <QTimer>
 #include <set>
-#include "QGrpcBase.h"
+#include "QAbstractGrpc.h"
 
-class QSrvServerPrivate : public QObject, public QGrpcBase::AbstractServer
+using grpc::Server;
+using grpc::ServerCompletionQueue;
+using grpc::CompletionQueue;
+using grpc::ServerBuilder;
+
+class QSrvServerPrivate : public QObject, public QGrpcSrvAbstract::AbstractServer
 {
 	Q_OBJECT
 	QTimer* cq_timer_ = nullptr;
 	std::atomic<bool> started_ = false;
-	std::set<QGrpcBase::AbstractService*> services_;
+	std::set<QGrpcSrvAbstract::AbstractService*> services_;
 	std::unique_ptr<Server> server_;
 	std::unique_ptr<ServerCompletionQueue> server_cq_;
 public:
-	inline void addService(QGrpcBase::AbstractService* const service) { services_.insert(service); }
-	inline void deleteService(QGrpcBase::AbstractService* const service) { services_.erase(service); }
+	inline void addService(QGrpcSrvAbstract::AbstractService* const service) { services_.insert(service); }
+	inline void deleteService(QGrpcSrvAbstract::AbstractService* const service) { services_.erase(service); }
 
 	inline virtual CompletionQueue* CQ() override { return server_cq_.get(); }
 	virtual void Shutdown() override
@@ -100,22 +105,20 @@ public:
 	QGrpcSrvServer()
 	{
 		server_.moveToThread(&serverThread_);
-		//bool c = connect(&serverThread_, SIGNAL(started()), &server_, SLOT(start())); assert(c);
+		bool c = connect(&serverThread_, SIGNAL(started()), &server_, SLOT(start())); assert(c);
 		//bool c = connect(&serverThread_, SIGNAL(finished()), &server_, SLOT(stop())); assert(c);
 		//c = connect(&monitorThread, SIGNAL(finished()), &monitor, SLOT(deleteLater())); assert(c);
-		bool c = connect(this, SIGNAL(toStart()), &server_, SLOT(start())); assert(c);
 		//c = connect(this, SIGNAL(toStop()), &server_, SLOT(stop()), Qt::QueuedConnection); assert(c);
 	}
-	inline void addService(QGrpcBase::AbstractService* const service) { server_.addService(service); }
-	inline void deleteService(QGrpcBase::AbstractService* const service) { server_.deleteService(service); }
+	inline void addService(QGrpcSrvAbstract::AbstractService* const service) { server_.addService(service); }
+	inline void deleteService(QGrpcSrvAbstract::AbstractService* const service) { server_.deleteService(service); }
 
 	inline void start()
 	{
 		if (!serverThread_.isRunning())
 			serverThread_.start();
-		emit toStart();
 	}
-	
+
 	~QGrpcSrvServer()
 	{
 		server_.stop();
@@ -123,7 +126,4 @@ public:
 		serverThread_.wait();
 	}
 	inline QThread* grpcThread() const { return const_cast<QThread*>(&(this->serverThread_)); }
-signals:
-	void toStart();
-	//void toStop();
 };

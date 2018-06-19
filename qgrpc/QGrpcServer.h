@@ -1,6 +1,6 @@
 #pragma once
 
-#include "QGrpcBase.h"
+#include "QAbstractGrpc.h"
 
 using grpc::Channel;
 using grpc::Server;
@@ -178,17 +178,17 @@ namespace QGrpcSrvBase
 		virtual ~AbstractCallData() {}
 	};
 
-	class QGrpcServerService : public QGrpcBase::AbstractService
+	class QGrpcServerService : public QGrpcSrvAbstract::AbstractService
 	{
 		grpc::Service* service_;
 		std::string addr_uri_;
 		std::mutex mutex_;
-		QGrpcBase::AbstractServer* server_ = nullptr;
+		QGrpcSrvAbstract::AbstractServer* server_ = nullptr;
 	public:
 
-		inline virtual void Start(const QGrpcBase::AbstractServer* server) override
+		inline virtual void Start(const QGrpcSrvAbstract::AbstractServer* server) override
 		{
-			server_ = const_cast<QGrpcBase::AbstractServer*>(server);
+			server_ = const_cast<QGrpcSrvAbstract::AbstractServer*>(server);
 			makeRequests();
 		}
 
@@ -233,7 +233,7 @@ namespace QGrpcSrvBase
 			if (!server_ || !server_->Started()) return;
 			void* tag;
 			bool ok = false;
-			bool re = server_->CQ()->Next(&tag, &ok);
+			/*bool re = */server_->CQ()->Next(&tag, &ok);
 			return tagActions_(tag, ok);
 		}
 

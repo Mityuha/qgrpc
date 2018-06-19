@@ -136,14 +136,27 @@ build_pass{
         MOC_PATH=$$[QT_INSTALL_BINS]/moc
         win32:MOC_PATH=$$replace(MOC_PATH, /, \\)
         
-        QGRPC_MONITOR = $$PWD/qgrpc/QGrpcMonitor.h
-        qgrpc_monitor_moc.input = QGRPC_MONITOR
-        qgrpc_monitor_moc.output = $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
-        qgrpc_monitor_moc.CONFIG = target_predeps
-        qgrpc_monitor_moc.variable_out = GENERATED_SOURCES
-        qgrpc_monitor_moc.commands = $${MOC_PATH} $(DEFINES) ${QMAKE_FILE_IN} -o $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
-        qgrpc_monitor_moc.dependency_type = TYPE_C
-        QMAKE_EXTRA_COMPILERS *= qgrpc_monitor_moc
+        contains(QGRPC_CONFIG, "server") {
+            QGRPC_MONITOR = $$PWD/qgrpc/QGrpcServerMonitor.h
+            qgrpc_monitor_moc.input = QGRPC_MONITOR
+            qgrpc_monitor_moc.output = $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
+            qgrpc_monitor_moc.CONFIG = target_predeps
+            qgrpc_monitor_moc.variable_out = GENERATED_SOURCES
+            qgrpc_monitor_moc.commands = $${MOC_PATH} $(DEFINES) ${QMAKE_FILE_IN} -o $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
+            qgrpc_monitor_moc.dependency_type = TYPE_C
+            QMAKE_EXTRA_COMPILERS *= qgrpc_monitor_moc
+        }
+        
+        contains(QGRPC_CONFIG, "client") {
+            QGRPC_MONITOR = $$PWD/qgrpc/QGrpcClientMonitor.h
+            qgrpc_monitor_moc.input = QGRPC_MONITOR
+            qgrpc_monitor_moc.output = $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
+            qgrpc_monitor_moc.CONFIG = target_predeps
+            qgrpc_monitor_moc.variable_out = GENERATED_SOURCES
+            qgrpc_monitor_moc.commands = $${MOC_PATH} $(DEFINES) ${QMAKE_FILE_IN} -o $${MOC_DIR}/moc_${QMAKE_FILE_BASE}.cpp
+            qgrpc_monitor_moc.dependency_type = TYPE_C
+            QMAKE_EXTRA_COMPILERS *= qgrpc_monitor_moc
+        }
         
         CUR_CONFIG=
         contains(QGRPC_CONFIG, "client") {

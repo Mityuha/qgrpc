@@ -44,9 +44,9 @@ def generateDeclarations(package, services, messages, grpc_pb_h_file, config):
 #include <QObject>
 #include "%s.grpc.pb.h"
 #include "QGrpc%s.h"
-#include "QGrpcMonitor.h"
+#include "QGrpc%sMonitor.h"
 
-""" % (grpc_pb_h_file, config.title(),)
+""" % (grpc_pb_h_file, config.title(), config.title(),)
     for sm in services + messages: s += """using %s::%s;\n""" % (package, sm)
     return s
 

@@ -21,11 +21,13 @@ class mainWindow : public QMainWindow, public Ui_mainWindow
 	Q_OBJECT
     QpingClientService pingPongSrv;
 	//QPingPongService pingPongSrv;
-	QGrpcServiceMonitor monitor;
+	QGrpcCliServer server;
 	bool stop_1M_stream;
 	bool stop_MM_stream;
 public:
-	mainWindow() : Ui_mainWindow(), stop_1M_stream(false), stop_MM_stream(false)
+	mainWindow() : 
+		stop_1M_stream(false), 
+		stop_MM_stream(false)
 	{
 		setupUi(this);
 		bool c = false;
@@ -44,9 +46,8 @@ public:
 		c = connect(&pingPongSrv, SIGNAL(GladToSeeYouResponse(QpingClientService::GladToSeeYouCallData*)), this, SLOT(onGladToSeeYouResponse(QpingClientService::GladToSeeYouCallData*))); assert(c);
 		c = connect(&pingPongSrv, SIGNAL(BothGladToSeeResponse(QpingClientService::BothGladToSeeCallData*)), this, SLOT(onBothGladToSeeResponse(QpingClientService::BothGladToSeeCallData*))); assert(c);
 		c = connect(&pingPongSrv, SIGNAL(channelStateChanged(int, int)), this, SLOT(onPingPongStateChanged(int, int))); assert(c);
-		monitor.addService(&pingPongSrv);
-		monitor.startMonitor();
 		//
+		server.addService(&pingPongSrv);
 		pb_stop_write_stream->setDisabled(true);
 		pb_stop_read_write_stream->setDisabled(true);
 		pb_disconnect->setDisabled(true);
@@ -122,6 +123,7 @@ public:
 		if (ip.isEmpty()) return;
 		int port = sb_port->value();
 		pingPongSrv.grpc_connect(QString("%1:%2").arg(ip).arg(port).toStdString()); 
+		server.start();
 		pb_connect->setDisabled(true);
 		pb_disconnect->setDisabled(false);
 		pb_reconnect->setDisabled(false);
