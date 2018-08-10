@@ -24,8 +24,7 @@ isEmpty(GRPC_VERSION_OK) {
 
 
 PROTOC3_NAME=protoc3
-GRPC_PREFIX_PATH="C:\\Program Files (x86)\\Fort SDK"
-WIN32_SOME_SDK="C:\\Program Files (x86)\\Fort SDK\\lib"
+GRPC_PREFIX_PATH=
 
 unix {
     GRPC_CANDIDATES = "/opt/fort" "/usr/local"
@@ -41,11 +40,13 @@ unix {
 	    error("$$TARGET: Cannot find GRPC path")
 	}
 }
+#specify win32 prefix path here
+win32: GRPC_PREFIX_PATH="C:\\Program Files (x86)\\SOME_SDK"
 
 !build_pass:message("$$TARGET: GRPC prefix path = $$GRPC_PREFIX_PATH")
 
 INCLUDEPATH = "$$GRPC_PREFIX_PATH/include" $$INCLUDEPATH
-win32: LIBS += -L"$$WIN32_SOME_SDK\win32-msvc2015\grpc" #path to libs
+win32: LIBS += -L"$$GRPC_PREFIX_PATH\win32-msvc2015\grpc" #path to libs
 ###error("$$INCLUDEPATH")
 
 ### Описываем "компилятор" .proto --> C++ Source, .cc файл:
@@ -100,7 +101,7 @@ win32 {
   DEFINES += _CRT_SECURE_NO_WARNINGS
   QMAKE_CFLAGS_WARN_ON += -wd4100
   QMAKE_CXXFLAGS_WARN_ON += -wd4100
-  QMAKE_LIBDIR = "$$WIN32_SOME_SDK/lib/win32-msvc2015/grpc" $${QMAKE_LIBDIR}
+  QMAKE_LIBDIR = "$$GRPC_PREFIX_PATH\lib\win32-msvc2015\grpc" $${QMAKE_LIBDIR}
   LIBS *= -lgdi32
   CONFIG(debug, debug|release) {
     LIBS *= -lgrpc++d -lgprd -lgrpcd

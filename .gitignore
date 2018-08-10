@@ -472,4 +472,5 @@ ASALocalRun/
 *pb.cc
 *ui_*
 *.qgrpc.*.h
+*Makefile*
 
