@@ -5,113 +5,60 @@
 #include <set>
 #include "QAbstractGrpc.h"
 
-using grpc::Server;
-using grpc::ServerCompletionQueue;
-using grpc::CompletionQueue;
-using grpc::ServerBuilder;
-
-class QSrvServerPrivate : public QObject, public QGrpcSrvAbstract::AbstractServer
+class QSrvMonitorPrivate : public QObject
 {
 	Q_OBJECT
 	QTimer* cq_timer_ = nullptr;
-	std::atomic<bool> started_ = false;
-	std::set<QGrpcSrvAbstract::AbstractService*> services_;
-	std::unique_ptr<Server> server_;
-	std::unique_ptr<ServerCompletionQueue> server_cq_;
+	QGrpcSrvAbstract::AbstractService& service_;
+	std::atomic<bool> stopped_;
 public:
-	inline void addService(QGrpcSrvAbstract::AbstractService* const service) { services_.insert(service); }
-	inline void deleteService(QGrpcSrvAbstract::AbstractService* const service) { services_.erase(service); }
+	QSrvMonitorPrivate(QGrpcSrvAbstract::AbstractService& service)
+		:service_(service),
+		stopped_(false)
+	{}
 
-	inline virtual CompletionQueue* CQ() override { return server_cq_.get(); }
-	virtual void Shutdown() override
-	{
-		started_.store(false);
-		if (server_)
-		{
-			server_->Shutdown(std::chrono::system_clock::time_point());
-			for (const auto service : services_)
-				service->PrepareForShutdown();
-			server_->Wait();
-		}
-		if (server_cq_)
-		{
-			server_cq_->Shutdown(); // Always after the associated server's Shutdown()! 
-									// Drain the cq_ that was created 
-			void* ignored_tag; bool ignored_ok;
-			while (server_cq_->Next(&ignored_tag, &ignored_ok)) {}
-		}
-		server_ = nullptr;
-		server_cq_ = nullptr;
-	}
-
-	virtual bool Started() override { return started_.load(); }
-
-	virtual ~QSrvServerPrivate() 
-	{
-		Shutdown();
-	}
+	virtual ~QSrvMonitorPrivate(){}
 public slots :
 	void start()
 	{
 		if (!cq_timer_)
 		{
 			cq_timer_ = new QTimer(this);
+			cq_timer_->setSingleShot(true);
 			bool ok = connect(cq_timer_, SIGNAL(timeout()), this, SLOT(AsyncMonitorRpc())); assert(ok);
 		}
-		RegisterServices();
 		cq_timer_->start();
+		stopped_.store(false);
 	}
 	void stop()
 	{
-		Shutdown();
+		stopped_.store(true);
+		service_.PrepareForShutdown();
 	}
 
 	
 private slots:
 	void AsyncMonitorRpc()
 	{
-		if (!started_.load())
-		{
-			cq_timer_->stop();
+		service_.CheckCQ();
+		if (stopped_.load())
 			return;
-		}
-		for (auto* const service : services_)
-			service->CheckCQ();
+		cq_timer_->start();
 	}
-private:
-	void RegisterServices()
-	{
-		ServerBuilder builder;
-		for (const auto service : services_)
-		{
-			builder.AddListeningPort(service->ListeningPort(), grpc::InsecureServerCredentials());
-			builder.RegisterService(service->Service());
-		}
-		server_cq_ = builder.AddCompletionQueue();
-		server_ = builder.BuildAndStart();
-		started_ = true;
-		for (const auto service : services_)
-			service->Start(this);
-	}
-
 };
 
-class QGrpcSrvServer : public QObject
+class QGrpcSrvMonitor : public QObject
 {
 	Q_OBJECT
 	QThread serverThread_;
-	QSrvServerPrivate server_;
+	QSrvMonitorPrivate server_;
 public:
-	QGrpcSrvServer()
+	QGrpcSrvMonitor(QGrpcSrvAbstract::AbstractService& service)
+		:server_(service)
 	{
 		server_.moveToThread(&serverThread_);
 		bool c = connect(&serverThread_, SIGNAL(started()), &server_, SLOT(start())); assert(c);
-		//bool c = connect(&serverThread_, SIGNAL(finished()), &server_, SLOT(stop())); assert(c);
-		//c = connect(&monitorThread, SIGNAL(finished()), &monitor, SLOT(deleteLater())); assert(c);
-		//c = connect(this, SIGNAL(toStop()), &server_, SLOT(stop()), Qt::QueuedConnection); assert(c);
 	}
-	inline void addService(QGrpcSrvAbstract::AbstractService* const service) { server_.addService(service); }
-	inline void deleteService(QGrpcSrvAbstract::AbstractService* const service) { server_.deleteService(service); }
 
 	inline void start()
 	{
@@ -119,7 +66,7 @@ public:
 			serverThread_.start();
 	}
 
-	~QGrpcSrvServer()
+	~QGrpcSrvMonitor()
 	{
 		server_.stop();
 		serverThread_.quit();

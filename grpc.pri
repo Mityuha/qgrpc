@@ -24,8 +24,8 @@ isEmpty(GRPC_VERSION_OK) {
 
 
 PROTOC3_NAME=protoc3
-GRPC_PREFIX_PATH=
-WIN32_SOME_SDK="C:\\some_sdk"
+GRPC_PREFIX_PATH="C:\\Program Files (x86)\\Fort SDK"
+WIN32_SOME_SDK="C:\\Program Files (x86)\\Fort SDK\\lib"
 
 unix {
     GRPC_CANDIDATES = "/opt/fort" "/usr/local"

@@ -101,6 +101,7 @@ public:
 		server_.moveToThread(&serverThread_);
 		bool c = connect(&serverThread_, SIGNAL(started()), &server_, SLOT(start())); assert(c);
 		c = connect(&serverThread_, SIGNAL(finished()), &server_, SLOT(stop())); assert(c);
+		c = connect(this, SIGNAL(toStart()), &server_, SLOT(start())); assert(c);
 		c = connect(this, SIGNAL(toStop()), &server_, SLOT(stop())); assert(c);
 		c = connect(this, SIGNAL(toStop(QGrpcCliAbstract::AbstractService* const)), &server_, SLOT(stop(QGrpcCliAbstract::AbstractService* const))); assert(c);
 	}
@@ -114,6 +115,8 @@ public:
 	{
 		if (!serverThread_.isRunning())
 			serverThread_.start();
+		else
+			emit toStart();
 	}
 
 	inline void stop()
@@ -131,6 +134,7 @@ public:
 	}
 	inline QThread* grpcThread() const { return const_cast<QThread*>(&(this->serverThread_)); }
 signals:
+	void toStart();
 	void toStop();
 	void toStop(QGrpcCliAbstract::AbstractService* const);
 };

@@ -12,13 +12,12 @@ class mainWindow: public QMainWindow, public Ui_MainWindow
 {
     Q_OBJECT;
 	QpingServerService pingservice;
-	QGrpcSrvServer server;
+	QGrpcSrvMonitor pingmonitor;
 	
 public:
-	mainWindow():Ui_MainWindow()
+	mainWindow():Ui_MainWindow(), pingmonitor(pingservice)
 	{
 		setupUi(this);
-		server.addService(&pingservice);
 
         bool is_ok;
 		is_ok = connect(pb_start, SIGNAL(clicked()), this, SLOT(onStart1())); assert(is_ok);
@@ -29,8 +28,7 @@ public:
 		this->show();
     }
     ~mainWindow()
-	{
-	}
+	{}
 
 	void setText(QPlainTextEdit* te, const QString& text)
 	{
@@ -47,8 +45,8 @@ private slots:
 		auto port = sb_port->value();
 		auto addr_port = QString("%1:%2").arg(ipaddr).arg(port);
 		setText(plainTextEdit, QString("Server started on %1").arg(addr_port));
-		pingservice.AddListeningPort(QString("%1:%2").arg(ipaddr).arg(port).toStdString());
-		server.start();
+		pingservice.Start(QString("%1:%2").arg(ipaddr).arg(port).toStdString());
+		pingmonitor.start();
 		pb_start->setDisabled(true);
 		//pb_stop->setDisabled(false);
 	}

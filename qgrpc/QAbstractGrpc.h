@@ -21,23 +21,9 @@ namespace std {
 
 namespace QGrpcSrvAbstract
 {
-	using grpc::CompletionQueue;
-	class AbstractServer
-	{
-	public:
-		virtual CompletionQueue* CQ() = 0;
-		virtual void Shutdown() = 0;
-		virtual bool Started() = 0;
-	};
-
-
-    class AbstractService 
+    struct AbstractService 
 	{ 
-	public:
 		virtual void CheckCQ() = 0; 
-		virtual std::string ListeningPort() = 0;
-		virtual grpc::Service* Service() = 0;
-		virtual void Start(const AbstractServer* server) = 0;
 		virtual void PrepareForShutdown() = 0;
 	};
 }
