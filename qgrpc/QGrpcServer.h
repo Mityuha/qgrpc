@@ -170,6 +170,7 @@ namespace QGrpcSrvBase
 
 
     class QGrpcServerService;
+	template<typename RPC, typename RPCCallData> class ServerCallData;
 
     struct AbstractCallData
     {
@@ -239,6 +240,7 @@ namespace QGrpcSrvBase
 
         void Start(const std::string& addr_uri)
         { 
+			if (started_.load()) return;
             addr_uri_ = addr_uri;
             assert(!addr_uri_.empty()); assert(service_);
             ServerBuilder builder;
@@ -265,6 +267,9 @@ namespace QGrpcSrvBase
             return tagActions_(tag, ok);
         }
 
+	protected:
+		virtual void makeRequests() = 0;
+
         template<typename RPCTypes, typename RPCCallData>
         void needAnotherCallData()
         {
@@ -280,8 +285,7 @@ namespace QGrpcSrvBase
             cdatas_.erase(const_cast<AbstractCallData*>(cd));
             const_cast<AbstractCallData*>(cd)->Destroy();
         }
-    protected:
-        virtual void makeRequests() = 0;
+
         void tagActions_(void* tag, bool ok)
         {
             if (!tag)
@@ -295,6 +299,7 @@ namespace QGrpcSrvBase
         }
     private:
         std::set<AbstractCallData*> cdatas_;
+		template<typename RPC, typename RPCCallData> friend class ServerCallData;
 
     };
 
@@ -355,8 +360,7 @@ namespace QGrpcSrvBase
             //call generated service signal with generated call data argument
             ((const_cast<typename RPC::ServiceType*>(dynamic_cast<const typename RPC::ServiceType*>(service_)))->*signal_func_)(genRpcCallData);
         }
-        friend typename RPC::ServiceType;
-        friend QGrpcServerService;
+        friend class QGrpcServerService;
     };
 
 
