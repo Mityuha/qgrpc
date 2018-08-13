@@ -474,3 +474,6 @@ ASALocalRun/
 *.qgrpc.*.h
 *Makefile*
 
+html/
+latex/
+

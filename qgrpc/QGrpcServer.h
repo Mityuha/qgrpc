@@ -65,7 +65,7 @@ namespace QGrpcSrvBase
         bool couldBeDeleted_;
         void* tag_;
         virtual bool processEvent(void*, bool) = 0;
-		bool CouldBeDeleted() const { return couldBeDeleted_; };
+        bool CouldBeDeleted() const { return couldBeDeleted_; };
     };
 
     template<typename KIND, typename ReplyType, typename RequestType> struct ServerResponder;

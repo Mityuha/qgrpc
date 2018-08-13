@@ -267,6 +267,8 @@ namespace QGrpcCliBase
         using FuncType = void (SERVICE::*)(int, int);
         FuncType channelStateChangedSignal_;
         bool not_connected_notified_;
+        CompletionQueue cq_;
+        friend typename SERVICE;
     public:
         explicit MonitorFeatures(AbstractConnectivityFeatures* conn, FuncType signal) : conn_(conn), channelStateChangedSignal_(signal), not_connected_notified_(false) {}
         virtual bool CheckCQ() override
@@ -301,8 +303,6 @@ namespace QGrpcCliBase
             static_cast< AbstractCallData< SERVICE >* >(tag)->cqActions(service_, ok);
             return true;
         }
-    public:
-        CompletionQueue cq_;
     };
 
     template<typename RPC, typename RPCCallData> 
@@ -310,10 +310,11 @@ namespace QGrpcCliBase
     {
         using FuncType = void (RPC::Service::*)(RPCCallData*);
         FuncType func_;
+        friend typename RPC::Service;
     public:
         explicit ClientCallData(FuncType func) :func_(func) {}
-        virtual ~ClientCallData() 
-        {}
+        virtual ~ClientCallData() {}
+    private:
         inline virtual void cqActions(const typename RPC::Service* service, bool ok) override
         {
             auto response = dynamic_cast<RPCCallData*>(this);
@@ -326,7 +327,6 @@ namespace QGrpcCliBase
             //}
             (const_cast< typename RPC::Service* >(service)->*func_)( response );
         }
-        friend typename RPC::Service;
     };
 
     template<typename KIND, typename REQUEST, typename REPLY, typename SERVICE> struct RPCtypes
