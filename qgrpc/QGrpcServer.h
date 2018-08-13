@@ -59,13 +59,13 @@ namespace QGrpcSrvBase
         Status status;
         ServerResponderBase(): responder(&context), couldBeDeleted_(false), tag_(nullptr) {}
         virtual ~ServerResponderBase() {}
-        bool CouldBeDeleted() const { return couldBeDeleted_; };
         inline std::string peer() const { return context.peer(); }
     protected:
         responder_type responder; //must be deleted before context
         bool couldBeDeleted_;
         void* tag_;
         virtual bool processEvent(void*, bool) = 0;
+		bool CouldBeDeleted() const { return couldBeDeleted_; };
     };
 
     template<typename KIND, typename ReplyType, typename RequestType> struct ServerResponder;
@@ -326,41 +326,41 @@ namespace QGrpcSrvBase
     template<typename RPC, typename RPCCallData>
     class ServerCallData : public AbstractCallData, public ServerResponder< typename RPC::kind, typename RPC::ReplyType, typename RPC::RequestType >
     {
-        using SignalType = void (RPC::ServiceType::*)( RPCCallData* );
-        using RPCRequestType = typename RPC::RPCRequestFuncType;
-        SignalType signal_func_;
-        RPCRequestType request_func_;
-        bool first_time_reaction_;
-        virtual void Destroy() override 
-        {
-            //upcast this to generated call data and delete it
-            auto response = dynamic_cast<RPCCallData*>(this);
-            delete response;
-        }
-
+		using SignalType = void (RPC::ServiceType::*)(RPCCallData*);
+		using RPCRequestType = typename RPC::RPCRequestFuncType;
+		SignalType signal_func_;
+		RPCRequestType request_func_;
+		bool first_time_reaction_;
+		friend class QGrpcServerService;
     public:
         explicit ServerCallData(SignalType signal_func, RPCRequestType request_func) :signal_func_(signal_func), request_func_(request_func), first_time_reaction_(false) {}
         virtual ~ServerCallData() {}
-        inline virtual void cqReaction(const QGrpcServerService* service_, bool ok) override
-        {    
-            if (!first_time_reaction_)
-            {
-                first_time_reaction_ = true;
-                (const_cast<QGrpcServerService*>(service_))->needAnotherCallData<RPC, RPCCallData>();
-            }
-            auto genRpcCallData = dynamic_cast<RPCCallData*>(this); //Generated RPCCallData inherited from this (ServerCallData)
-            void* tag = static_cast<void*>(genRpcCallData); //generated RPCCallData uses as tag for request calls
+	private:
+		virtual void Destroy() override
+		{
+			//upcast this to generated call data and delete it
+			auto response = dynamic_cast<RPCCallData*>(this);
+			delete response;
+		}
+		inline virtual void cqReaction(const QGrpcServerService* service_, bool ok) override
+		{
+			if (!first_time_reaction_)
+			{
+				first_time_reaction_ = true;
+				(const_cast<QGrpcServerService*>(service_))->needAnotherCallData<RPC, RPCCallData>();
+			}
+			auto genRpcCallData = dynamic_cast<RPCCallData*>(this); //Generated RPCCallData inherited from this (ServerCallData)
+			void* tag = static_cast<void*>(genRpcCallData); //generated RPCCallData uses as tag for request calls
 
-            if (this->CouldBeDeleted())//CouldBeDeleted is a part of ServerResponder (from which this is inherited)
-            {
-                (const_cast<QGrpcServerService*>(service_))->destroyCallData(this); //this inherited from AbstractCallData
-                return;
-            }
-            if (!this->processEvent(tag, ok)) return; //processEvent is a part of ServerResponder (from which this is inherited)
-            //call generated service signal with generated call data argument
-            ((const_cast<typename RPC::ServiceType*>(dynamic_cast<const typename RPC::ServiceType*>(service_)))->*signal_func_)(genRpcCallData);
-        }
-        friend class QGrpcServerService;
+			if (this->CouldBeDeleted())//CouldBeDeleted is a part of ServerResponder (from which this is inherited)
+			{
+				(const_cast<QGrpcServerService*>(service_))->destroyCallData(this); //this inherited from AbstractCallData
+				return;
+			}
+			if (!this->processEvent(tag, ok)) return; //processEvent is a part of ServerResponder (from which this is inherited)
+													  //call generated service signal with generated call data argument
+			((const_cast<typename RPC::ServiceType*>(dynamic_cast<const typename RPC::ServiceType*>(service_)))->*signal_func_)(genRpcCallData);
+		}
     };
 
 
