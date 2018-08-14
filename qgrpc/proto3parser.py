@@ -5,6 +5,12 @@
 #  Copyright 2010, Paul McGuire
 #
 
+"""
+Edited by: dmakarov
+Time: 26 april 2018 12:02
+Comments: parse services and RPCs
+"""
+
 from pyparsing import (Word, alphas, alphanums, Regex, Suppress, Forward,
     Group, oneOf, ZeroOrMore, Optional, delimitedList, Keyword,
     restOfLine, quotedString, Dict)
